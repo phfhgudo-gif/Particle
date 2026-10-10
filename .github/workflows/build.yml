@@ -7,28 +7,42 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Unzip and find project
+
+      - name: Find project
         id: find
         run: |
-          mkdir -p /tmp/proj
-          unzip -q -o ./*.zip -d /tmp/proj
-          f=$(find /tmp/proj -name build.gradle | head -1)
+          f=$(find . -name build.gradle -not -path './.git/*' | head -1)
           if [ -z "$f" ]; then
-            echo "ไม่พบ build.gradle"
-            find /tmp/proj -type f | head -50
+            mkdir -p /tmp/proj
+            find . -iname '*.zip' -not -path './.git/*' | while read -r z; do
+              unzip -q -o "$z" -d "/tmp/proj/$(basename "$z" .zip)"
+            done
+            f=$(find /tmp/proj -name build.gradle | head -1)
+          fi
+          if [ -z "$f" ]; then
+            echo "ไม่พบ build.gradle และไม่พบซิปโปรเจกต์ ไฟล์ใน repo:"
+            find . -type f -not -path './.git/*' | head -50
             exit 1
           fi
-          echo "dir=$(dirname "$f")" >> "$GITHUB_OUTPUT"
+          echo "dir=$(cd "$(dirname "$f")" && pwd)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.8
+
       - name: Build
         working-directory: ${{ steps.find.outputs.dir }}
-        run: gradle build
+        run: gradle build --no-daemon
+
       - uses: actions/upload-artifact@v4
         with:
           name: onepiece-fx-forge-1.20.1-github-repo-jar
